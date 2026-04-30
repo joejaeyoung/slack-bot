@@ -14,6 +14,9 @@ spring:
 slack:
   bot-token: xoxb-test
   signing-secret: test-secret
+  channel:
+    team: C_TEST_TEAM
+    scrum: C_TEST_SCRUM
 
 google:
   client-id: test
