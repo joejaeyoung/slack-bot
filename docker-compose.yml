@@ -2,6 +2,12 @@ services:
   bot:
     build: .
     env_file: .env
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: scheduler
+      PGUSER: bot
+      PGPASSWORD: bot
     ports:
       - "8080:8080"
     depends_on:
