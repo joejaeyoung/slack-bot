@@ -20,6 +20,9 @@ spring:
 slack:
   bot-token: ${SLACK_BOT_TOKEN}
   signing-secret: ${SLACK_SIGNING_SECRET}
+  channel:
+    team: ${SLACK_CHANNEL_TEAM}
+    scrum: ${SLACK_CHANNEL_SCRUM}
 
 google:
   client-id: ${GOOGLE_CLIENT_ID}
