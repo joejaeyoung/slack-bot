@@ -73,10 +73,16 @@ public class BriefingService {
         List<UserCalendar> calendars = userCalendarRepository.findByUser(user);
         String refreshToken = user.getGoogleRefreshToken();
 
-        return calendars.stream()
-                .flatMap(cal -> calendarClient
-                        .fetchEvents(cal.getCalendarId(), refreshToken, date, cal.getNameFilter())
-                        .stream())
+        List<CompletableFuture<List<CalendarEvent>>> futures = calendars.stream()
+                .map(cal -> CompletableFuture.supplyAsync(
+                        () -> calendarClient.fetchEvents(cal.getCalendarId(), refreshToken, date, cal.getNameFilter()),
+                        apiExecutor))
+                .toList();
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        return futures.stream()
+                .flatMap(f -> f.join().stream())
                 .sorted(Comparator.comparing(CalendarEvent::start,
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
