@@ -6,24 +6,37 @@ import com.custom.bot.integration.jira.JiraClient;
 import com.custom.bot.repository.UserRepository;
 import com.custom.bot.service.JiraIssueSummary;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.Executor;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class TaskCommandHandler {
 
     private final JiraClient jiraClient;
     private final UserRepository userRepository;
+    @Qualifier("apiExecutor")
+    private final Executor apiExecutor;
 
     private static final List<String> MEMBERS = List.of("조재영", "권태화", "안수빈");
 
     public void register(App app) {
         app.command("/task-team", (req, ctx) -> {
-            List<JiraIssueSummary> issues = jiraClient.findIssuesDueOn(LocalDate.now());
-            return ctx.ack(buildIssueText("팀 전체", issues));
+            apiExecutor.execute(() -> {
+                try {
+                    List<JiraIssueSummary> issues = jiraClient.findIssuesDueOn(LocalDate.now());
+                    ctx.respond(buildIssueText("팀 전체", issues));
+                } catch (Exception e) {
+                    log.error("/task-team 응답 실패", e);
+                }
+            });
+            return ctx.ack();
         });
 
         for (String name : MEMBERS) {
@@ -33,9 +46,16 @@ public class TaskCommandHandler {
                 if (user == null) {
                     return ctx.ack(":x: `" + memberName + "` 을(를) 찾을 수 없습니다.");
                 }
-                List<JiraIssueSummary> issues = jiraClient.findIssuesAssignedTo(
-                        user.getJiraAccountId(), LocalDate.now());
-                return ctx.ack(buildIssueText(memberName, issues));
+                apiExecutor.execute(() -> {
+                    try {
+                        List<JiraIssueSummary> issues = jiraClient.findIssuesAssignedTo(
+                                user.getJiraAccountId(), LocalDate.now());
+                        ctx.respond(buildIssueText(memberName, issues));
+                    } catch (Exception e) {
+                        log.error("/task-{} 응답 실패", memberName, e);
+                    }
+                });
+                return ctx.ack();
             });
         }
     }
