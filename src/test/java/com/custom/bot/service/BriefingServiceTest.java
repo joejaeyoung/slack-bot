@@ -1,8 +1,10 @@
 package com.custom.bot.service;
 
 import com.custom.bot.domain.User;
+import com.custom.bot.domain.UserCalendar;
 import com.custom.bot.integration.google.GoogleCalendarClient;
 import com.custom.bot.integration.jira.JiraClient;
+import com.custom.bot.repository.UserCalendarRepository;
 import com.custom.bot.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,12 +23,15 @@ import java.util.concurrent.Executors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class BriefingServiceTest {
 
     @Mock UserRepository userRepository;
+    @Mock UserCalendarRepository userCalendarRepository;
     @Mock GoogleCalendarClient calendarClient;
     @Mock JiraClient jiraClient;
 
@@ -44,14 +49,20 @@ class BriefingServiceTest {
         return new User(name, "U_" + name, "JIRA_" + name, name + "@gmail.com", "token");
     }
 
+    private UserCalendar makeCalendar(User user, String calendarId) {
+        return new UserCalendar(user, calendarId, null);
+    }
+
     @Test
     void getTeamBriefing_팀원_일정과_Jira_병렬_fetch() {
         User user = makeUser("조재영");
+        UserCalendar cal = makeCalendar(user, "cal1");
         CalendarEvent event = new CalendarEvent("스탠드업", OffsetDateTime.now(), OffsetDateTime.now().plusHours(1), null);
         JiraIssueSummary issue = new JiraIssueSummary("PROJ-1", "버그 수정", "조재영", "In Progress", LocalDate.now());
 
         when(userRepository.findAll()).thenReturn(List.of(user));
-        when(calendarClient.fetchEvents(anyString(), anyString(), any())).thenReturn(List.of(event));
+        when(userCalendarRepository.findByUser(user)).thenReturn(List.of(cal));
+        when(calendarClient.fetchEvents(anyString(), anyString(), any(), isNull())).thenReturn(List.of(event));
         when(jiraClient.findIssuesDueOn(any())).thenReturn(List.of(issue));
 
         Briefing briefing = briefingService.getTeamBriefing();
@@ -63,7 +74,9 @@ class BriefingServiceTest {
     @Test
     void getPersonalBriefing_개인_일정과_Jira_병렬_fetch() {
         User user = makeUser("권태화");
-        when(calendarClient.fetchEvents(anyString(), anyString(), any())).thenReturn(List.of());
+        UserCalendar cal = makeCalendar(user, "cal2");
+        when(userCalendarRepository.findByUser(user)).thenReturn(List.of(cal));
+        when(calendarClient.fetchEvents(anyString(), anyString(), any(), isNull())).thenReturn(List.of());
         when(jiraClient.findIssuesAssignedTo(anyString(), any())).thenReturn(List.of());
 
         Briefing briefing = briefingService.getPersonalBriefing(user);

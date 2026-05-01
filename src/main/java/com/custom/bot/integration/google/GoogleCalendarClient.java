@@ -27,6 +27,10 @@ public class GoogleCalendarClient {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     public List<CalendarEvent> fetchEvents(String calendarId, String refreshToken, LocalDate date) {
+        return fetchEvents(calendarId, refreshToken, date, null);
+    }
+
+    public List<CalendarEvent> fetchEvents(String calendarId, String refreshToken, LocalDate date, String nameFilter) {
         try {
             var credentials = calendarConfig.buildCredentials(refreshToken);
             var calendar = new Calendar.Builder(
@@ -46,6 +50,7 @@ public class GoogleCalendarClient {
                     .execute();
 
             return events.getItems().stream()
+                    .filter(e -> nameFilter == null || (e.getSummary() != null && e.getSummary().startsWith(nameFilter)))
                     .map(this::toCalendarEvent)
                     .toList();
 

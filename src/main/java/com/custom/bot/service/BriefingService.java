@@ -1,14 +1,18 @@
 package com.custom.bot.service;
 
 import com.custom.bot.domain.User;
+import com.custom.bot.domain.UserCalendar;
 import com.custom.bot.integration.google.GoogleCalendarClient;
 import com.custom.bot.integration.jira.JiraClient;
+import com.custom.bot.repository.UserCalendarRepository;
 import com.custom.bot.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +24,7 @@ import java.util.stream.Collectors;
 public class BriefingService {
 
     private final UserRepository userRepository;
+    private final UserCalendarRepository userCalendarRepository;
     private final GoogleCalendarClient calendarClient;
     private final JiraClient jiraClient;
     @Qualifier("apiExecutor")
@@ -31,8 +36,7 @@ public class BriefingService {
 
         List<CompletableFuture<Map.Entry<User, List<CalendarEvent>>>> calFutures = users.stream()
                 .map(user -> CompletableFuture.supplyAsync(
-                        () -> Map.entry(user, calendarClient.fetchEvents(
-                                user.getGoogleCalendarId(), user.getGoogleRefreshToken(), today)),
+                        () -> Map.entry(user, fetchUserEvents(user, today)),
                         apiExecutor))
                 .toList();
 
@@ -55,15 +59,26 @@ public class BriefingService {
         LocalDate today = LocalDate.now();
 
         CompletableFuture<List<CalendarEvent>> calFuture = CompletableFuture.supplyAsync(
-                () -> calendarClient.fetchEvents(user.getGoogleCalendarId(), user.getGoogleRefreshToken(), today),
-                apiExecutor);
+                () -> fetchUserEvents(user, today), apiExecutor);
 
         CompletableFuture<List<JiraIssueSummary>> jiraFuture = CompletableFuture.supplyAsync(
-                () -> jiraClient.findIssuesAssignedTo(user.getJiraAccountId(), today),
-                apiExecutor);
+                () -> jiraClient.findIssuesAssignedTo(user.getJiraAccountId(), today), apiExecutor);
 
         CompletableFuture.allOf(calFuture, jiraFuture).join();
 
         return new Briefing(today, Map.of(user, calFuture.join()), jiraFuture.join());
+    }
+
+    private List<CalendarEvent> fetchUserEvents(User user, LocalDate date) {
+        List<UserCalendar> calendars = userCalendarRepository.findByUser(user);
+        String refreshToken = user.getGoogleRefreshToken();
+
+        return calendars.stream()
+                .flatMap(cal -> calendarClient
+                        .fetchEvents(cal.getCalendarId(), refreshToken, date, cal.getNameFilter())
+                        .stream())
+                .sorted(Comparator.comparing(CalendarEvent::start,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 }
